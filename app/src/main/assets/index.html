@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
 <meta name="theme-color" content="#080818">
 <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22%E7%A5%9E%E7%A0%81%E5%86%8D%E7%8E%B0%22,%22short_name%22:%22%E7%A5%9E%E7%A0%81%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23080818%22,%22theme_color%22:%22%23080818%22}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; manifest-src 'self' data:; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src *; img-src * data:;">
-<meta name="referrer" content="no-referrer-when-downgrade">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; manifest-src 'self' data:; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src *; img-src * data:; media-src * blob:; worker-src 'self' blob:; child-src blob:;">
+<meta name="referrer" content="no-referrer">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta http-equiv="Cache-Control" content="max-age=3600">
 <meta name="description" content="神码再现 · 杀码助手，支持频次分析、实时开奖、历史查询">
@@ -14,6 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <!-- Tailwind Play CDN 为 JIT 编译器，动态生成CSS，无法使用固定SRI -->
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="./hls.min.js"></script>
 <script>
   // 降级检测：若 Tailwind CDN 加载失败，fallback CSS 仍可保证基本布局
   if (typeof window.tailwind === 'undefined') {
@@ -1204,6 +1205,144 @@ body {
     pointer-events: none;
   }
 }
+
+/* ======================== 视频模块 video.css ======================== */
+.video-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: #080818;
+  display: flex; flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.28s ease;
+  visibility: hidden;
+}
+.video-overlay.open { transform: translateY(0); visibility: visible; }
+.video-overlay-header {
+  flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  background: rgba(10,10,18,0.95); border-bottom: 1px solid rgba(0,255,234,0.25);
+}
+.video-overlay-title { color: #00ffea; font-weight: 700; font-size: 17px; letter-spacing: 1px; }
+.video-overlay-close {
+  margin-left: auto; width: 32px; height: 32px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; color: #00ffea; background: rgba(0,255,234,0.08);
+  transition: background 0.2s;
+}
+.video-overlay-close:active { background: rgba(0,255,234,0.25); }
+.video-overlay-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 12px 90px; }
+
+.video-search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.video-search-input {
+  flex: 1; background: rgba(0,255,234,0.06); border: 1px solid rgba(0,255,234,0.3);
+  border-radius: 8px; padding: 8px 12px; color: #e0fffb; font-size: 14px; outline: none;
+}
+.video-search-input::placeholder { color: rgba(160,220,215,0.4); }
+.video-search-btn {
+  background: linear-gradient(135deg, rgba(0,255,234,0.9), rgba(0,102,255,0.9));
+  color: #000; font-weight: 600; border-radius: 8px; padding: 8px 16px; font-size: 14px;
+}
+.video-chip-row {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px;
+  scrollbar-width: none;
+}
+.video-chip-row::-webkit-scrollbar { display: none; }
+.video-chip {
+  flex-shrink: 0; padding: 5px 12px; font-size: 12px; border-radius: 999px;
+  border: 1px solid rgba(0,255,234,0.35); color: rgba(190,240,235,0.85);
+  background: rgba(0,255,234,0.05); white-space: nowrap; cursor: pointer;
+}
+.video-chip.active {
+  background: #00ffea; color: #000; border-color: transparent; font-weight: 600;
+  box-shadow: 0 0 10px rgba(0,255,234,0.5);
+}
+.video-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.video-card { cursor: pointer; }
+.video-card-pic {
+  position: relative; width: 100%; aspect-ratio: 3/4; border-radius: 8px; overflow: hidden;
+  background: rgba(0,255,234,0.06); border: 1px solid rgba(0,255,234,0.15);
+}
+.video-card-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.video-card-pic .video-card-remark {
+  position: absolute; top: 4px; right: 4px; font-size: 10px; padding: 1px 6px;
+  background: rgba(0,0,0,0.65); color: #00ffea; border-radius: 4px; max-width: 80%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.video-card-name {
+  margin-top: 4px; font-size: 12px; color: #d8fffb; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.video-load-more {
+  display: block; margin: 14px auto 4px; padding: 8px 24px; font-size: 13px;
+  border: 1px solid rgba(0,255,234,0.4); border-radius: 8px; color: #00ffea;
+  background: rgba(0,255,234,0.06);
+}
+.video-empty, .video-loading { text-align: center; color: rgba(160,220,215,0.5); padding: 40px 0; font-size: 13px; }
+.video-loading::after { content: '...'; animation: videoDots 1.2s steps(3) infinite; }
+@keyframes videoDots { 0%{content:''} 33%{content:'.'} 66%{content:'..'} 100%{content:'...'} }
+
+/* 详情面板 */
+.video-detail-head { display: flex; gap: 12px; margin-bottom: 12px; }
+.video-detail-pic {
+  width: 96px; height: 128px; flex-shrink: 0; border-radius: 8px; overflow: hidden;
+  border: 1px solid rgba(0,255,234,0.25); background: rgba(0,255,234,0.06);
+}
+.video-detail-pic img { width: 100%; height: 100%; object-fit: cover; }
+.video-detail-meta { flex: 1; min-width: 0; }
+.video-detail-name { font-size: 16px; font-weight: 700; color: #e8fffd; margin-bottom: 6px; }
+.video-detail-info { font-size: 12px; color: rgba(160,220,215,0.7); line-height: 1.7; }
+.video-detail-blurb {
+  font-size: 12px; color: rgba(200,235,230,0.65); line-height: 1.7; margin-bottom: 12px;
+  max-height: 84px; overflow-y: auto;
+}
+.video-episode-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+.video-episode-btn {
+  padding: 8px 2px; font-size: 12px; text-align: center; border-radius: 6px;
+  border: 1px solid rgba(0,255,234,0.3); color: rgba(200,245,240,0.9);
+  background: rgba(0,255,234,0.05); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.video-episode-btn.active { background: #00ffea; color: #000; font-weight: 600; }
+.video-source-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+
+/* 播放器 */
+.video-player-mask {
+  position: fixed; inset: 0; z-index: 300; background: #000;
+  display: flex; flex-direction: column; visibility: hidden; opacity: 0;
+  transition: opacity 0.25s;
+}
+.video-player-mask.open { visibility: visible; opacity: 1; }
+.video-player-top {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  background: linear-gradient(rgba(0,0,0,0.75), transparent);
+}
+.video-player-title { color: #fff; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.video-player-close {
+  margin-left: auto; flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(255,255,255,0.15); color: #fff; font-size: 17px;
+  display: flex; align-items: center; justify-content: center;
+}
+.video-player-box { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+.video-player-box video { width: 100%; max-height: 100%; background: #000; }
+.video-player-error {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  color: #ff5577; font-size: 13px; background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 8px;
+}
+
+/* 直播频道网格 */
+.live-channel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.live-channel-btn {
+  padding: 12px 4px; font-size: 12px; text-align: center; border-radius: 8px;
+  border: 1px solid rgba(0,255,234,0.3); color: rgba(200,245,240,0.9);
+  background: rgba(0,255,234,0.05); overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  min-height: 44px; word-break: break-all;
+}
+.live-group-title {
+  grid-column: 1 / -1; color: #00ffea; font-size: 13px; font-weight: 600;
+  padding: 8px 0 2px; border-bottom: 1px solid rgba(0,255,234,0.15);
+}
+.nav-item.video-nav { border-color: rgba(255,0,85,0.6) !important; color: #ff5c8a !important; }
 </style>
 </head>
 <body class="mech-grid text-gray-300 overflow-x-hidden">
@@ -1269,6 +1408,8 @@ body {
       <button type="button" class="nav-item" data-drawer="bandanshuang" aria-label="单双筛选">单双</button>
       <button type="button" class="nav-item" data-drawer="history" aria-label="历史开奖">历史</button>
       <button type="button" class="nav-item" data-drawer="selectnone" aria-label="清空所有筛选">清空</button>
+      <button type="button" class="nav-item video-nav" id="navVod" aria-label="影视点播">影视</button>
+      <button type="button" class="nav-item video-nav" id="navLive" aria-label="电视直播">直播</button>
     </div>
   </nav>
 
@@ -1278,6 +1419,33 @@ body {
     <div id="drawer-content" class="p-4 space-y-4 pb-20 bg-[#0a0a12]"></div>
   </div>
   <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#0a0a12] border border-[#00ffea]/30 text-[#00ffea] px-6 py-3 rounded-lg shadow-[0_0_20px_rgba(0,255,234,0.3)] transform translate-y-20 opacity-0 transition-all duration-300 z-[200] pointer-events-none"></div>
+</div>
+
+<!-- 影视点播 overlay -->
+<div id="vodOverlay" class="video-overlay">
+  <div class="video-overlay-header">
+    <span class="video-overlay-title">影视点播</span>
+    <button type="button" class="video-overlay-close" id="vodOverlayClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="video-overlay-body" id="vodBody"></div>
+</div>
+
+<!-- 电视直播 overlay -->
+<div id="liveOverlay" class="video-overlay">
+  <div class="video-overlay-header">
+    <span class="video-overlay-title">电视直播</span>
+    <button type="button" class="video-overlay-close" id="liveOverlayClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="video-overlay-body" id="liveBody"></div>
+</div>
+
+<!-- 视频播放器 -->
+<div id="videoPlayerMask" class="video-player-mask">
+  <div class="video-player-top">
+    <span class="video-player-title" id="videoPlayerTitle">播放</span>
+    <button type="button" class="video-player-close" id="videoPlayerClose" aria-label="关闭播放">✕</button>
+  </div>
+  <div class="video-player-box"><video id="videoPlayerEl" controls playsinline webkit-playsinline></video></div>
 </div>
 
 <!-- 设置下拉菜单 -->
@@ -3046,6 +3214,710 @@ body {
   }
 
   if (window.__DEBUG__) console.log("%c✅ 设置菜单已加载", "color:#00ffea;font-weight:bold");
+})();
+</script>
+<script>
+// ======================== 视频模块 video.js v1.0 ========================
+(function () {
+  'use strict';
+
+  /* ==================== 配置 ==================== */
+  var CONFIG_URL = 'https://v4.gh-proxy.org/https://raw.githubusercontent.com/energy65/yl/refs/heads/main/forever.json';
+  var CONFIG_BASE = CONFIG_URL.slice(0, CONFIG_URL.lastIndexOf('/') + 1); // 拼接 ./ 相对路径
+  var CFG_KEY = 'shenma_video_cfg_v1';
+  var CFG_AGE = 24 * 3600 * 1000;
+
+  // 兜底点播源（远程配置拉取失败时使用，均为验证可用的苹果CMS JSON 接口）
+  var FALLBACK_SITES = [
+    { name: '量子资源', api: 'https://cj.lziapi.com/api.php/provide/vod/from/lzm3u8' },
+    { name: '暴风资源', api: 'https://bf.xoxowin86cisyap.com/api.php/provide/vod' },
+    { name: '火狐资源', api: 'https://hhzyapi.com/api.php/provide/vod' },
+    { name: '极速资源', api: 'https://jszyapi.com/api.php/provide/vod' },
+    { name: '独播资源', api: 'https://caiji.dbzy5.com/api.php/provide/vod' },
+    { name: '非凡资源', api: 'https://cj.ffzyapi.com/api.php/provide/vod' }
+  ];
+  var FALLBACK_LIVES = [
+    { name: '源力zb', url: CONFIG_BASE + 'ylzb.txt' },
+    { name: '轮播直播', url: 'http://hucongrong.tttttttttt.top/dsj.txt' },
+    { name: '短剧直播', url: 'http://hucongrong.tttttttttt.top/dj.txt' },
+    { name: '斗鱼一起看', url: 'https://d.kstore.dev/download/6651/douyuyqk.m3u' },
+    { name: 'B站直播', url: 'https://d.kstore.dev/download/6651/bililive.m3u' },
+    { name: '2500部恐怖片', url: 'https://d.kstore.dev/download/6651/%E7%94%B5%E5%BD%B1.txt' }
+  ];
+
+  /* ==================== 工具 ==================== */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  var vtoastTimer = null;
+  function vtoast(msg) {
+    var t = $('toast');
+    if (!t) return;
+    if (vtoastTimer) { clearTimeout(vtoastTimer); vtoastTimer = null; }
+    t.textContent = msg;
+    t.classList.remove('translate-y-20', 'opacity-0');
+    t.style.transform = 'translateY(0)';
+    t.style.opacity = '1';
+    vtoastTimer = setTimeout(function () {
+      t.classList.add('translate-y-20', 'opacity-0');
+      t.style.transform = 'translateY(5rem)';
+      t.style.opacity = '0';
+      vtoastTimer = null;
+    }, 2200);
+  }
+  // 请求 JSON（带超时 + BOM 兼容 + 序号防串扰由调用方控制）
+  function fetchJson(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs || 15000);
+      fetch(url, { signal: ctrl.signal }).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      }).then(function (text) {
+        clearTimeout(timer);
+        text = text.replace(/^﻿/, '').trim();
+        try { resolve(JSON.parse(text)); } catch (e) { reject(new Error('JSON 解析失败')); }
+      }).catch(function (e) {
+        clearTimeout(timer);
+        reject(e);
+      });
+    });
+  }
+  // 请求文本（arrayBuffer + GBK/UTF-8 自动检测，直播列表常见 GBK 编码）
+  function fetchText(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs || 15000);
+      fetch(url, { signal: ctrl.signal }).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.arrayBuffer();
+      }).then(function (buf) {
+        clearTimeout(timer);
+        var text;
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+        catch (e) { try { text = new TextDecoder('gbk').decode(buf); } catch (e2) { text = new TextDecoder('utf-8').decode(buf); } }
+        resolve(text);
+      }).catch(function (e) {
+        clearTimeout(timer);
+        reject(e);
+      });
+    });
+  }
+  // 直播列表相对路径 → 绝对路径
+  function absUrl(u) {
+    if (!u) return u;
+    if (u.indexOf('./') === 0) return CONFIG_BASE + u.slice(2);
+    return u;
+  }
+
+  /* ==================== 播放器 ==================== */
+  var hlsInst = null;
+  var playerOpen = false;
+
+  function isM3U8(url) { return /\.m3u8(\?|$)/i.test(url); }
+
+  function openPlayer(url, title) {
+    var mask = $('videoPlayerMask');
+    var video = $('videoPlayerEl');
+    $('videoPlayerTitle').textContent = title || '播放';
+    mask.classList.add('open');
+    playerOpen = true;
+    history.pushState({ vl: 'player' }, '');
+
+    destroyHls();
+    if (isM3U8(url)) {
+      if (window.Hls && Hls.isSupported()) {
+        hlsInst = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          manifestLoadingMaxRetry: 2,
+          levelLoadingMaxRetry: 3,
+          fragLoadingMaxRetry: 3
+        });
+        hlsInst.loadSource(url);
+        hlsInst.attachMedia(video);
+        hlsInst.on(Hls.Events.MANIFEST_PARSED, function () { video.play().catch(function () {}); });
+        hlsInst.on(Hls.Events.ERROR, function (evt, data) {
+          if (data && data.fatal) {
+            vtoast('播放失败：' + (data.details || '网络错误'));
+            closePlayerViaBack();
+          }
+        });
+      } else {
+        // 少数 WebView 原生支持 HLS
+        video.src = url;
+        video.play().catch(function () {});
+      }
+    } else {
+      video.src = url;
+      video.play().catch(function () {});
+    }
+    video.onerror = function () {
+      if (playerOpen) vtoast('视频加载失败，请换源重试');
+    };
+  }
+
+  function destroyHls() {
+    if (hlsInst) { try { hlsInst.destroy(); } catch (e) {} hlsInst = null; }
+  }
+
+  function closePlayerUI() {
+    var mask = $('videoPlayerMask');
+    var video = $('videoPlayerEl');
+    destroyHls();
+    try { video.pause(); } catch (e) {}
+    video.removeAttribute('src');
+    try { video.load(); } catch (e) {}
+    mask.classList.remove('open');
+    playerOpen = false;
+  }
+
+  // 点 X：通过 history.back() 走 popstate 统一关闭，保持返回栈一致
+  function closePlayerViaBack() {
+    if (history.state && history.state.vl === 'player') { history.back(); return; }
+    closePlayerUI();
+  }
+
+  /* ==================== 层级返回栈 ==================== */
+  // overlay: 'vod' | 'live' | null
+  var openOverlayId = null;
+
+  function pushLayer(id) { history.pushState({ vl: id }, ''); }
+
+  function showOverlay(id) {
+    var el = $(id === 'vod' ? 'vodOverlay' : 'liveOverlay');
+    el.classList.add('open');
+    openOverlayId = id;
+    pushLayer(id);
+  }
+  function hideOverlayUI() {
+    if (!openOverlayId) return;
+    $(openOverlayId === 'vod' ? 'vodOverlay' : 'liveOverlay').classList.remove('open');
+    openOverlayId = null;
+  }
+
+  window.addEventListener('popstate', function () {
+    if (playerOpen) { closePlayerUI(); return; }
+    if (openOverlayId) { hideOverlayUI(); return; }
+  });
+
+  /* ==================== 点播模块 ==================== */
+  var vod = {
+    sites: [],        // [{name, api, categories}]
+    siteIdx: -1,
+    classes: [],      // 当前源分类
+    typeId: 0,
+    page: 1,
+    pagecount: 1,
+    kw: '',           // 搜索关键词（空 = 分类浏览）
+    view: 'home',     // home | detail
+    detail: null,     // {info:{...}, lines:[{from, eps:[{name,url}]}]}
+    lineIdx: 0,
+    reqSeq: 0,        // 请求序号，丢弃过期响应
+    inited: false
+  };
+
+  function normApi(api) { return api.replace(/\/+$/, ''); }
+
+  // 解析远程 forever.json：只保留可直连的 JSON 采集站（type=1）与直播列表
+  function parseVideoConfig(cfg) {
+    var sites = [];
+    if (cfg && cfg.sites) {
+      cfg.sites.forEach(function (s) {
+        if (s && s.type === 1 && typeof s.api === 'string' && /^https?:\/\//.test(s.api)
+            && !/\.(py|js|php)$/i.test(s.api) && s.api.indexOf('/at/xml') === -1) {
+          sites.push({ name: String(s.name || s.key || '未命名').replace(/[\r\n]/g, ' ').slice(0, 12), api: normApi(s.api), categories: s.categories || null });
+        }
+      });
+    }
+    var lives = [];
+    if (cfg && cfg.lives) {
+      cfg.lives.forEach(function (l) {
+        if (l && typeof l.url === 'string' && l.url) {
+          lives.push({ name: String(l.name || '直播').replace(/[\r\n]/g, ' ').slice(0, 12), url: absUrl(l.url) });
+        }
+      });
+    }
+    return { sites: sites, lives: lives };
+  }
+
+  function loadVideoConfig() {
+    // 先读缓存
+    try {
+      var raw = localStorage.getItem(CFG_KEY);
+      if (raw) {
+        var c = JSON.parse(raw);
+        if (c && c._t && Date.now() - c._t < CFG_AGE && c.sites && c.sites.length) {
+          vod.sites = c.sites; live.lives = c.lives || [];
+          return Promise.resolve(true);
+        }
+      }
+    } catch (e) {}
+    return refreshVideoConfig();
+  }
+
+  function refreshVideoConfig() {
+    return fetchJson(CONFIG_URL, 12000).then(function (cfg) {
+      var parsed = parseVideoConfig(cfg);
+      if (parsed.sites.length) {
+        vod.sites = parsed.sites;
+        live.lives = parsed.lives;
+        try { localStorage.setItem(CFG_KEY, JSON.stringify({ sites: parsed.sites, lives: parsed.lives, _t: Date.now() })); } catch (e) {}
+        return true;
+      }
+      throw new Error('配置无可用源');
+    }).catch(function (e) {
+      vod.sites = FALLBACK_SITES.slice();
+      live.lives = FALLBACK_LIVES.slice();
+      return false;
+    });
+  }
+
+  /* ---------- 点播视图渲染 ---------- */
+  function vodBody() { return $('vodBody'); }
+
+  function renderVodShell() {
+    var html = '';
+    html += '<div class="video-search-row">';
+    html += '<input class="video-search-input" id="vodSearchInput" placeholder="输入片名搜索当前源..." value="' + esc(vod.kw) + '">';
+    html += '<button type="button" class="video-search-btn" id="vodSearchBtn">搜索</button>';
+    html += '</div>';
+    html += '<div class="video-chip-row" id="vodSiteRow"></div>';
+    html += '<div class="video-chip-row" id="vodClassRow"></div>';
+    html += '<div id="vodContent"></div>';
+    vodBody().innerHTML = html;
+
+    $('vodSearchBtn').addEventListener('click', function () {
+      var kw = $('vodSearchInput').value.trim();
+      vod.kw = kw; vod.page = 1; vod.typeId = 0; vod.view = 'home';
+      loadVodList();
+    });
+    $('vodSearchInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') $('vodSearchBtn').click();
+    });
+    renderSiteRow();
+  }
+
+  function renderSiteRow() {
+    var row = $('vodSiteRow');
+    if (!row) return;
+    var html = '';
+    vod.sites.forEach(function (s, i) {
+      html += '<button type="button" class="video-chip' + (i === vod.siteIdx ? ' active' : '') + '" data-site="' + i + '">' + esc(s.name) + '</button>';
+    });
+    row.innerHTML = html;
+    row.querySelectorAll('[data-site]').forEach(function (btn) {
+      btn.addEventListener('click', function () { selectSite(parseInt(btn.getAttribute('data-site'), 10)); });
+    });
+  }
+
+  function renderClassRow() {
+    var row = $('vodClassRow');
+    if (!row) return;
+    if (vod.kw) { row.innerHTML = '<span style="color:rgba(160,220,215,0.5);font-size:12px;padding:4px;">搜索：' + esc(vod.kw) + '　（点源名可退出搜索）</span>'; return; }
+    var html = '<button type="button" class="video-chip' + (vod.typeId === 0 ? ' active' : '') + '" data-type="0">推荐</button>';
+    vod.classes.forEach(function (c) {
+      html += '<button type="button" class="video-chip' + (String(c.type_id) === String(vod.typeId) ? ' active' : '') + '" data-type="' + esc(c.type_id) + '">' + esc(c.type_name) + '</button>';
+    });
+    row.innerHTML = html;
+    row.querySelectorAll('[data-type]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        vod.typeId = btn.getAttribute('data-type');
+        vod.typeId = vod.typeId === '0' ? 0 : vod.typeId;
+        vod.page = 1; vod.view = 'home';
+        renderClassRow();
+        loadVodList();
+      });
+    });
+  }
+
+  function curSiteApi() {
+    if (vod.siteIdx < 0 || vod.siteIdx >= vod.sites.length) return null;
+    return vod.sites[vod.siteIdx].api;
+  }
+
+  function selectSite(i) {
+    if (i === vod.siteIdx && vod.classes.length) return;
+    vod.siteIdx = i; vod.classes = []; vod.typeId = 0; vod.page = 1; vod.kw = ''; vod.view = 'home';
+    var input = $('vodSearchInput'); if (input) input.value = '';
+    renderSiteRow();
+    loadClasses();
+  }
+
+  function loadClasses() {
+    var api = curSiteApi();
+    if (!api) return;
+    var seq = ++vod.reqSeq;
+    renderClassRow();
+    var content = $('vodContent');
+    if (content) content.innerHTML = '<div class="video-loading">加载分类</div>';
+    fetchJson(api + '?ac=list', 12000).then(function (j) {
+      if (seq !== vod.reqSeq) return;
+      var cls = (j && j['class']) || [];
+      // 按配置 categories 过滤
+      var filter = vod.sites[vod.siteIdx] && vod.sites[vod.siteIdx].categories;
+      if (filter && filter.length) {
+        var allow = {};
+        filter.forEach(function (n) { allow[n] = 1; });
+        var f = cls.filter(function (c) { return allow[c.type_name]; });
+        if (f.length) cls = f;
+      }
+      vod.classes = cls;
+      renderClassRow();
+      loadVodList();
+    }).catch(function (e) {
+      if (seq !== vod.reqSeq) return;
+      if (content) content.innerHTML = '<div class="video-empty">分类加载失败（' + esc(e.message || '网络错误') + '）<br><br><button type="button" class="video-load-more" id="vodRetry">重试</button></div>';
+      var r = $('vodRetry'); if (r) r.addEventListener('click', loadClasses);
+    });
+  }
+
+  function loadVodList(append) {
+    var api = curSiteApi();
+    if (!api) return;
+    var seq = ++vod.reqSeq;
+    var content = $('vodContent');
+    if (!append && content) content.innerHTML = '<div class="video-loading">加载影片</div>';
+    var url;
+    if (vod.kw) {
+      url = api + '?ac=videolist&wd=' + encodeURIComponent(vod.kw) + '&pg=' + vod.page;
+    } else if (vod.typeId) {
+      url = api + '?ac=videolist&t=' + encodeURIComponent(vod.typeId) + '&pg=' + vod.page;
+    } else {
+      url = api + '?ac=videolist&pg=' + vod.page;
+    }
+    fetchJson(url, 15000).then(function (j) {
+      if (seq !== vod.reqSeq) return;
+      var list = (j && j.list) || [];
+      vod.pagecount = parseInt(j && j.pagecount, 10) || 1;
+      renderVodList(list, append);
+    }).catch(function (e) {
+      if (seq !== vod.reqSeq) return;
+      if (content) content.innerHTML = '<div class="video-empty">加载失败（' + esc(e.message || '网络错误') + '）<br><br><button type="button" class="video-load-more" id="vodRetry">重试</button></div>';
+      var r = $('vodRetry'); if (r) r.addEventListener('click', function () { loadVodList(); });
+    });
+  }
+
+  function renderVodList(list, append) {
+    var content = $('vodContent');
+    if (!content) return;
+    if (!append && !list.length) {
+      content.innerHTML = '<div class="video-empty">暂无数据</div>';
+      return;
+    }
+    var html = '';
+    if (!append) html += '<div class="video-grid" id="vodGrid">';
+    list.forEach(function (v) {
+      html += '<div class="video-card" data-vid="' + esc(v.vod_id) + '">';
+      html += '<div class="video-card-pic">';
+      html += '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(v.vod_pic || '') + '" onerror="this.style.display=\'none\'">';
+      if (v.vod_remarks) html += '<span class="video-card-remark">' + esc(v.vod_remarks) + '</span>';
+      html += '</div>';
+      html += '<div class="video-card-name">' + esc(v.vod_name) + '</div>';
+      html += '</div>';
+    });
+    var moreBtn = '';
+    if (vod.page < vod.pagecount) moreBtn = '<button type="button" class="video-load-more" id="vodMore">加载更多（' + vod.page + '/' + vod.pagecount + '）</button>';
+    else if (list.length) moreBtn = '<div class="video-empty" style="padding:14px 0;">已到底</div>';
+
+    if (append) {
+      var grid = $('vodGrid');
+      var oldMore = $('vodMore'); if (oldMore) oldMore.remove();
+      var oldEnd = content.querySelector('.video-empty'); if (oldEnd) oldEnd.remove();
+      if (grid) grid.insertAdjacentHTML('beforeend', html);
+      content.insertAdjacentHTML('beforeend', moreBtn);
+    } else {
+      content.innerHTML = html + '</div>' + moreBtn;
+    }
+    content.querySelectorAll('[data-vid]').forEach(function (card) {
+      card.addEventListener('click', function () { loadVodDetail(card.getAttribute('data-vid')); });
+    });
+    var more = $('vodMore');
+    if (more) more.addEventListener('click', function () { vod.page++; loadVodList(true); });
+  }
+
+  /* ---------- 详情 ---------- */
+  function loadVodDetail(vid) {
+    var api = curSiteApi();
+    if (!api) return;
+    var seq = ++vod.reqSeq;
+    var content = $('vodContent');
+    if (content) content.innerHTML = '<div class="video-loading">加载详情</div>';
+    vodBody().scrollTop = 0;
+    fetchJson(api + '?ac=videolist&ids=' + encodeURIComponent(vid), 15000).then(function (j) {
+      if (seq !== vod.reqSeq) return;
+      var v = j && j.list && j.list[0];
+      if (!v) throw new Error('未找到影片');
+      vod.detail = parseVodDetail(v);
+      vod.lineIdx = 0;
+      vod.view = 'detail';
+      renderVodDetail();
+    }).catch(function (e) {
+      if (seq !== vod.reqSeq) return;
+      if (content) content.innerHTML = '<div class="video-empty">详情加载失败（' + esc(e.message || '网络错误') + '）<br><br><button type="button" class="video-load-more" id="vodBackList">返回列表</button></div>';
+      var b = $('vodBackList'); if (b) b.addEventListener('click', backToVodList);
+    });
+  }
+
+  // 解析苹果CMS 播放字段：vod_play_from / vod_play_url 均按 $$$ 分线路，线路内 集名$url#集名$url
+  function parseVodDetail(v) {
+    var froms = String(v.vod_play_from || '默认').split('$$$');
+    var urls = String(v.vod_play_url || '').split('$$$');
+    var lines = [];
+    for (var i = 0; i < urls.length; i++) {
+      var eps = [];
+      urls[i].split('#').forEach(function (seg) {
+        var p = seg.indexOf('$');
+        if (p > -1) eps.push({ name: seg.slice(0, p) || '播放', url: seg.slice(p + 1).trim() });
+        else if (seg.trim()) eps.push({ name: '播放', url: seg.trim() });
+      });
+      eps = eps.filter(function (e) { return /^https?:\/\//i.test(e.url); });
+      if (eps.length) lines.push({ from: froms[i] || ('线路' + (i + 1)), eps: eps });
+    }
+    return { info: v, lines: lines };
+  }
+
+  function renderVodDetail() {
+    var content = $('vodContent');
+    if (!content || !vod.detail) return;
+    var v = vod.detail.info;
+    var html = '';
+    html += '<button type="button" class="video-load-more" id="vodBack" style="margin:0 0 10px;">← 返回列表</button>';
+    html += '<div class="video-detail-head">';
+    html += '<div class="video-detail-pic"><img referrerpolicy="no-referrer" src="' + esc(v.vod_pic || '') + '" onerror="this.style.display=\'none\'"></div>';
+    html += '<div class="video-detail-meta">';
+    html += '<div class="video-detail-name">' + esc(v.vod_name) + '</div>';
+    html += '<div class="video-detail-info">';
+    if (v.vod_remarks) html += esc(v.vod_remarks) + '<br>';
+    if (v.type_name) html += '分类：' + esc(v.type_name) + '<br>';
+    if (v.vod_year) html += '年份：' + esc(v.vod_year) + '　';
+    if (v.vod_area) html += '地区：' + esc(v.vod_area) + '<br>';
+    if (v.vod_actor) html += '主演：' + esc(String(v.vod_actor).slice(0, 40)) + '<br>';
+    html += '</div></div></div>';
+    if (v.vod_blurb || v.vod_content) {
+      var blurb = String(v.vod_blurb || v.vod_content || '').replace(/<[^>]+>/g, '').trim();
+      if (blurb) html += '<div class="video-detail-blurb">' + esc(blurb.slice(0, 300)) + '</div>';
+    }
+    if (!vod.detail.lines.length) {
+      html += '<div class="video-empty">该影片暂无可播放地址</div>';
+    } else {
+      if (vod.detail.lines.length > 1) {
+        html += '<div class="video-source-tabs" id="vodLines">';
+        vod.detail.lines.forEach(function (ln, i) {
+          html += '<button type="button" class="video-chip' + (i === vod.lineIdx ? ' active' : '') + '" data-line="' + i + '">' + esc(ln.from) + '</button>';
+        });
+        html += '</div>';
+      }
+      html += '<div class="video-episode-grid" id="vodEps">';
+      vod.detail.lines[vod.lineIdx].eps.forEach(function (ep, i) {
+        html += '<button type="button" class="video-episode-btn" data-ep="' + i + '">' + esc(ep.name) + '</button>';
+      });
+      html += '</div>';
+    }
+    content.innerHTML = html;
+
+    $('vodBack').addEventListener('click', backToVodList);
+    var linesEl = $('vodLines');
+    if (linesEl) linesEl.querySelectorAll('[data-line]').forEach(function (btn) {
+      btn.addEventListener('click', function () { vod.lineIdx = parseInt(btn.getAttribute('data-line'), 10); renderVodDetail(); });
+    });
+    content.querySelectorAll('[data-ep]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var ep = vod.detail.lines[vod.lineIdx].eps[parseInt(btn.getAttribute('data-ep'), 10)];
+        content.querySelectorAll('.video-episode-btn.active').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        openPlayer(ep.url, v.vod_name + ' · ' + ep.name);
+      });
+    });
+  }
+
+  function backToVodList() {
+    vod.view = 'home';
+    vod.reqSeq++;
+    renderClassRow();
+    loadVodList();
+  }
+
+  /* ---------- 点播入口 ---------- */
+  function openVod() {
+    showOverlay('vod');
+    if (!vod.inited) {
+      vod.inited = true;
+      renderVodShell();
+      var content = $('vodContent');
+      if (content) content.innerHTML = '<div class="video-loading">加载视频源配置</div>';
+      loadVideoConfig().then(function () {
+        if (!vod.sites.length) {
+          if (content) content.innerHTML = '<div class="video-empty">未找到可用点播源</div>';
+          return;
+        }
+        renderSiteRow();
+        selectSite(0);
+      });
+    } else {
+      // 后台刷新配置（不阻塞 UI）
+      refreshVideoConfig().then(function (changed) { if (changed && vod.siteIdx < 0) renderSiteRow(); });
+    }
+  }
+
+  /* ==================== 直播模块 ==================== */
+  var live = {
+    lives: [],
+    liveIdx: -1,
+    channels: [],   // [{group, name, url}]
+    inited: false,
+    reqSeq: 0
+  };
+
+  function renderLiveShell() {
+    var html = '';
+    html += '<div class="video-chip-row" id="liveListRow"></div>';
+    html += '<div id="liveContent"></div>';
+    $('liveBody').innerHTML = html;
+    renderLiveRow();
+  }
+
+  function renderLiveRow() {
+    var row = $('liveListRow');
+    if (!row) return;
+    var html = '';
+    live.lives.forEach(function (l, i) {
+      html += '<button type="button" class="video-chip' + (i === live.liveIdx ? ' active' : '') + '" data-live="' + i + '">' + esc(l.name) + '</button>';
+    });
+    row.innerHTML = html;
+    row.querySelectorAll('[data-live]').forEach(function (btn) {
+      btn.addEventListener('click', function () { selectLive(parseInt(btn.getAttribute('data-live'), 10)); });
+    });
+  }
+
+  // 解析 m3u：#EXTINF 行取尾部频道名，下一非注释行为 url
+  function parseM3U(text) {
+    var channels = [];
+    var lines = text.split(/\r?\n/);
+    var pendingName = null;
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i].trim();
+      if (!ln) continue;
+      if (ln.indexOf('#EXTINF') === 0) {
+        var comma = ln.lastIndexOf(',');
+        pendingName = comma > -1 ? ln.slice(comma + 1).trim() : '未知频道';
+      } else if (ln.charAt(0) !== '#') {
+        if (/^https?:\/\//i.test(ln)) {
+          channels.push({ group: '', name: pendingName || '频道' + (channels.length + 1), url: ln });
+          pendingName = null;
+        }
+      }
+    }
+    return channels;
+  }
+
+  // 解析 TVBox txt：分组,#genre# 行 + 频道名,url 行（多源 # 分隔取第一个）
+  function parseLiveTxt(text) {
+    var channels = [];
+    var group = '';
+    var lines = text.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i].trim();
+      if (!ln) continue;
+      if (/#genre#/.test(ln)) {
+        group = ln.replace(/,#genre#.*$/, '').replace(/#genre#/, '').trim();
+        continue;
+      }
+      var comma = ln.indexOf(',');
+      if (comma > 0) {
+        var name = ln.slice(0, comma).trim();
+        var urlPart = ln.slice(comma + 1).trim();
+        var url = urlPart.split('#')[0].trim();
+        if (name && /^https?:\/\//i.test(url)) channels.push({ group: group, name: name, url: url });
+      }
+    }
+    return channels;
+  }
+
+  function selectLive(i) {
+    if (i === live.liveIdx && live.channels.length) return;
+    live.liveIdx = i;
+    renderLiveRow();
+    var content = $('liveContent');
+    if (content) content.innerHTML = '<div class="video-loading">加载频道</div>';
+    var seq = ++live.reqSeq;
+    var item = live.lives[i];
+    fetchText(item.url, 15000).then(function (text) {
+      if (seq !== live.reqSeq) return;
+      var channels = /#EXTM3U|#EXTINF/i.test(text) ? parseM3U(text) : parseLiveTxt(text);
+      live.channels = channels;
+      renderLiveChannels();
+    }).catch(function (e) {
+      if (seq !== live.reqSeq) return;
+      if (content) content.innerHTML = '<div class="video-empty">频道加载失败（' + esc(e.message || '网络错误') + '）<br><br><button type="button" class="video-load-more" id="liveRetry">重试</button></div>';
+      var r = $('liveRetry'); if (r) r.addEventListener('click', function () { selectLive(live.liveIdx); });
+    });
+  }
+
+  function renderLiveChannels() {
+    var content = $('liveContent');
+    if (!content) return;
+    if (!live.channels.length) {
+      content.innerHTML = '<div class="video-empty">该列表暂无频道</div>';
+      return;
+    }
+    var html = '<div class="live-channel-grid">';
+    var lastGroup = null;
+    live.channels.forEach(function (ch, i) {
+      if (ch.group && ch.group !== lastGroup) {
+        lastGroup = ch.group;
+        html += '<div class="live-group-title">' + esc(ch.group) + '</div>';
+      }
+      html += '<button type="button" class="live-channel-btn" data-ch="' + i + '">' + esc(ch.name) + '</button>';
+    });
+    html += '</div>';
+    content.innerHTML = html;
+    content.querySelectorAll('[data-ch]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var ch = live.channels[parseInt(btn.getAttribute('data-ch'), 10)];
+        openPlayer(ch.url, ch.name);
+      });
+    });
+  }
+
+  function openLive() {
+    showOverlay('live');
+    if (!live.inited) {
+      live.inited = true;
+      renderLiveShell();
+      var content = $('liveContent');
+      if (content) content.innerHTML = '<div class="video-loading">加载直播配置</div>';
+      loadVideoConfig().then(function () {
+        if (!live.lives.length) {
+          if (content) content.innerHTML = '<div class="video-empty">未找到可用直播列表</div>';
+          return;
+        }
+        renderLiveRow();
+        selectLive(0);
+      });
+    }
+  }
+
+  /* ==================== 事件绑定 ==================== */
+  function bind() {
+    var navVod = $('navVod');
+    var navLive = $('navLive');
+    if (navVod) navVod.addEventListener('click', function (e) { e.stopPropagation(); openVod(); });
+    if (navLive) navLive.addEventListener('click', function (e) { e.stopPropagation(); openLive(); });
+    var vodClose = $('vodOverlayClose');
+    var liveClose = $('liveOverlayClose');
+    var playerClose = $('videoPlayerClose');
+    // 关闭统一走 history.back()，由 popstate 处理 UI，保证返回栈一致
+    if (vodClose) vodClose.addEventListener('click', function () { history.back(); });
+    if (liveClose) liveClose.addEventListener('click', function () { history.back(); });
+    if (playerClose) playerClose.addEventListener('click', closePlayerViaBack);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
 })();
 </script>
 </body>
