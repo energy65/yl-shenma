@@ -18,11 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 改用官方 setup-android，稳定可靠
+      # 只需要基础Android SDK平台，不需要手动调用apksigner/zipalign
       - name: Setup Android SDK
-        uses: actions/setup-android@v3
+        uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools build-tools;34.0.0 platforms;android-34
+          packages: platform-tools platforms;android-34
+          accept-licenses: true
 
       - name: Download and install Gradle
         run: |
@@ -37,33 +38,21 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build and Release APK
+      # 解密JKS密钥到项目app目录
+      - name: Decode Keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/shenma.jks
+
+      # 环境变量传递签名参数给Gradle
+      - name: Build Signed Release APK
+        env:
+          KEYSTORE_FILE: shenma.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
-      - name: Decode Keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > shenma.jks
-
-      - name: Zipalign and sign the APK
-        run: |
-          UNSIGNED=$(ls app/build/outputs/apk/release/*.apk | tail -1)
-          echo "Unsigned APK: $UNSIGNED"
-          # 直接固定build-tools版本，不再ls遍历，避免空变量
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-          echo "Android Build Tools: $BUILD_TOOLS"
-
-          "$BUILD_TOOLS/zipalign" -p -f 4 "$UNSIGNED" shenma-aligned.apk
-
-          "$BUILD_TOOLS/apksigner" sign \
-            --ks shenma.jks \
-            --ks-key-alias ${{ secrets.KEY_ALIAS }} \
-            --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
-            --key-pass pass:${{ secrets.KEY_PASSWORD }} \
-            --out shenma-release.apk shenma-aligned.apk
-
-          "$BUILD_TOOLS/apksigner" verify --verbose shenma-release.apk
-
-      - name: Upload APK
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v6
         with:
           name: ShenmaAPP-v3.7.11-release
-          path: shenma-release.apk
+          path: app/build/outputs/apk/release/app-release.apk
