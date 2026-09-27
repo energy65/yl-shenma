@@ -1,10 +1,8 @@
 name: Build APK
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   construction:
     runs-on: ubuntu-latest
@@ -18,12 +16,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 只需要基础Android SDK平台，不需要手动调用apksigner/zipalign
+      # Setup Android SDK，移除不支持的 accept-licenses
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools platforms;android-34
-          accept-licenses: true
 
       - name: Download and install Gradle
         run: |
@@ -38,21 +35,29 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 解密JKS密钥到项目app目录
+      # 解密JKS密钥到app目录
       - name: Decode Keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/shenma.jks
 
-      # 环境变量传递签名参数给Gradle
+      # 清理旧产物 + 构建Release签名包
       - name: Build Signed Release APK
         env:
           KEYSTORE_FILE: shenma.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease
+        run: |
+          ./gradlew clean
+          ./gradlew assembleRelease
 
+      # 调试：打印所有apk文件路径
+      - name: Find all generated APK
+        run: find . -name "*.apk"
+
+      # 上传APK，使用通配符自动匹配，不用写死文件名
       - name: Upload Signed APK
         uses: actions/upload-artifact@v6
         with:
           name: ShenmaAPP-v3.7.11-release
-          path: app/build/outputs/apk/release/app-release.apk
+          path: |
+            **/build/outputs/apk/release/*.apk
