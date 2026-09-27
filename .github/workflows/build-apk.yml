@@ -1,0 +1,58 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download and install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip -O gradle.zip
+          unzip -q gradle.zip
+          rm gradle.zip
+          echo "$PWD/gradle-8.2/bin" >> $GITHUB_PATH
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > shenma.jks
+
+      - name: Zipalign and sign APK
+        run: |
+          UNSIGNED=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/zipalign" -p -f 4 "$UNSIGNED" shenma-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks shenma.jks \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+            --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+            --out shenma-release.apk shenma-aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose shenma-release.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: ShenmaAPP-v3.7.11-release
+          path: shenma-release.apk
