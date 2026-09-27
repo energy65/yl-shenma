@@ -18,10 +18,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # 改用官方 setup-android，稳定可靠
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: actions/setup-android@v3
         with:
-          # ✅ 重点：包名之间空格分隔，不能有逗号！
           packages: platform-tools build-tools;34.0.0 platforms;android-34
 
       - name: Download and install Gradle
@@ -47,7 +47,8 @@ jobs:
         run: |
           UNSIGNED=$(ls app/build/outputs/apk/release/*.apk | tail -1)
           echo "Unsigned APK: $UNSIGNED"
-          BUILD_TOOLS=$(ls -d "$ANDROID_HOME/build-tools/*" | sort -V | tail -1)
+          # 直接固定build-tools版本，不再ls遍历，避免空变量
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
           echo "Android Build Tools: $BUILD_TOOLS"
 
           "$BUILD_TOOLS/zipalign" -p -f 4 "$UNSIGNED" shenma-aligned.apk
